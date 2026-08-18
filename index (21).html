@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<base target="_top">
+<title>Rekap Surat Masuk SBBK Obat & BMHP</title>
+<style>
+  :root{
+    --hijau-tua:#124734;
+    --hijau:#1e6b4e;
+    --hijau-muda:#2f9e6f;
+    --hijau-pucat:#eaf5ef;
+    --emas:#c69a3a;
+    --kertas:#faf9f5;
+    --tinta:#1c2420;
+    --abu:#6b7570;
+    --garis:#dbe3dd;
+    --merah:#b3402f;
+    --radius:10px;
+    --font-utama:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Arial,sans-serif;
+    --font-angka:'Consolas',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--kertas);color:var(--tinta);font-family:var(--font-utama);}
+  body{min-height:100vh;}
+
+  /* ---------- HEADER / KOP ---------- */
+  .app-header{
+    background:linear-gradient(135deg,var(--hijau-tua),var(--hijau) 65%,var(--hijau-muda));
+    color:#fff;padding:22px 28px;display:flex;align-items:center;gap:16px;
+    box-shadow:0 4px 14px rgba(18,71,52,.25);
+    position:relative;overflow:hidden;
+  }
+  .app-header::after{
+    content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;border-radius:50%;
+    background:rgba(255,255,255,.06);
+  }
+  .app-header .lambang{
+    width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.15);
+    display:flex;align-items:center;justify-content:center;font-size:26px;flex:none;
+    border:2px solid rgba(255,255,255,.35);
+  }
+  .app-header .judul{position:relative;z-index:1;}
+  .app-header h1{margin:0;font-size:19px;font-weight:700;letter-spacing:.3px;}
+  .app-header p{margin:2px 0 0;font-size:12.5px;opacity:.85;}
+
+  .container{max-width:1240px;margin:0 auto;padding:20px 24px 60px;}
+
+  /* ---------- STAT CARDS ---------- */
+  .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:22px;}
+  .stat-card{
+    background:#fff;border:1px solid var(--garis);border-radius:var(--radius);padding:16px 18px;
+    border-left:4px solid var(--hijau-muda);
+  }
+  .stat-card .label{font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--abu);font-weight:600;}
+  .stat-card .value{font-family:var(--font-angka);font-size:26px;font-weight:700;color:var(--hijau-tua);margin-top:4px;}
+  .stat-card.emas{border-left-color:var(--emas);}
+  .stat-card.emas .value{color:#8a6a1f;}
+
+  /* ---------- TOOLBAR ---------- */
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px;}
+  .toolbar input[type=text], .toolbar select{
+    padding:9px 12px;border:1px solid var(--garis);border-radius:8px;font-size:13.5px;background:#fff;color:var(--tinta);
+  }
+  .toolbar input[type=text]{flex:1;min-width:180px;}
+  .spacer{flex:1;}
+  .btn{
+    border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px;transition:transform .08s ease, box-shadow .15s ease;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn-primer{background:var(--hijau);color:#fff;}
+  .btn-primer:hover{background:var(--hijau-tua);}
+  .btn-luar{background:#fff;border:1px solid var(--garis);color:var(--tinta);}
+  .btn-luar:hover{border-color:var(--hijau-muda);color:var(--hijau-tua);}
+  .btn-kecil{padding:5px 10px;font-size:12px;border-radius:6px;}
+  .btn-bahaya{background:#fdecea;color:var(--merah);}
+  .btn-bahaya:hover{background:#f8d7d3;}
+
+  /* ---------- TABLE ---------- */
+  .table-wrap{background:#fff;border:1px solid var(--garis);border-radius:var(--radius);overflow:hidden;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{
+    background:var(--hijau-pucat);color:var(--hijau-tua);text-align:left;padding:10px 12px;
+    font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--garis);white-space:nowrap;
+  }
+  tbody td{padding:10px 12px;border-bottom:1px solid #eef1ee;vertical-align:top;}
+  tbody tr:hover{background:#f6faf7;}
+  tbody tr:last-child td{border-bottom:none;}
+  td.num{font-family:var(--font-angka);text-align:right;}
+  .pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600;background:var(--hijau-pucat);color:var(--hijau-tua);}
+  .aksi-cell{white-space:nowrap;}
+  .kosong{padding:50px 20px;text-align:center;color:var(--abu);}
+  .kosong .ikon{font-size:34px;margin-bottom:8px;}
+
+  /* ---------- MODAL ---------- */
+  .overlay{
+    position:fixed;inset:0;background:rgba(18,30,24,.45);display:none;align-items:center;justify-content:center;
+    z-index:50;padding:20px;
+  }
+  .overlay.show{display:flex;}
+  .modal{
+    background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:90vh;overflow-y:auto;
+    box-shadow:0 20px 60px rgba(0,0,0,.25);
+  }
+  .modal-head{
+    padding:18px 22px;border-bottom:1px solid var(--garis);display:flex;justify-content:space-between;align-items:center;
+    position:sticky;top:0;background:#fff;
+  }
+  .modal-head h2{margin:0;font-size:16px;color:var(--hijau-tua);}
+  .modal-head button{background:none;border:none;font-size:20px;cursor:pointer;color:var(--abu);}
+  .modal-body{padding:20px 22px;}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .form-grid .full{grid-column:1/-1;}
+  .form-field label{display:block;font-size:12px;font-weight:600;color:var(--hijau-tua);margin-bottom:5px;}
+  .form-field input,.form-field select,.form-field textarea{
+    width:100%;padding:9px 11px;border:1px solid var(--garis);border-radius:8px;font-size:13.5px;font-family:inherit;background:#fff;
+  }
+  .form-field textarea{resize:vertical;min-height:56px;}
+  .form-field .hint{font-size:11px;color:var(--abu);margin-top:4px;}
+  .modal-foot{padding:16px 22px;border-top:1px solid var(--garis);display:flex;justify-content:flex-end;gap:10px;}
+  .required::after{content:" *";color:var(--merah);}
+
+  .datalist-wrap{position:relative;}
+  .tambah-master{margin-top:6px;}
+  .tambah-master a{font-size:11.5px;color:var(--hijau);cursor:pointer;text-decoration:underline;}
+
+  /* ---------- TOAST ---------- */
+  #toast{
+    position:fixed;bottom:22px;right:22px;background:var(--hijau-tua);color:#fff;padding:12px 18px;border-radius:8px;
+    font-size:13.5px;box-shadow:0 8px 24px rgba(0,0,0,.2);opacity:0;transform:translateY(10px);transition:all .25s ease;
+    z-index:100;max-width:320px;
+  }
+  #toast.show{opacity:1;transform:translateY(0);}
+  #toast.err{background:var(--merah);}
+
+  .loading-veil{position:fixed;inset:0;background:rgba(250,249,245,.75);display:flex;align-items:center;justify-content:center;z-index:200;}
+  .loading-veil.hide{display:none;}
+  .spinner{width:34px;height:34px;border:4px solid var(--garis);border-top-color:var(--hijau);border-radius:50%;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  footer{text-align:center;color:var(--abu);font-size:11.5px;margin-top:26px;}
+
+  @media print{
+    .app-header,.toolbar,.aksi-cell,.stat-row,footer,#toast,.no-print{display:none !important;}
+    body{background:#fff;}
+    .table-wrap{border:none;}
+  }
+  @media (max-width:720px){
+    .form-grid{grid-template-columns:1fr;}
+    .app-header{padding:16px;}
+    table{font-size:12px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="loading-veil" id="loadingVeil"><div class="spinner"></div></div>
+
+<header class="app-header">
+  <div class="lambang">💊</div>
+  <div class="judul">
+    <h1 id="judulInstansi">DINAS KESEHATAN KABUPATEN</h1>
+    <p>Rekap Surat Masuk SBBK Obat &amp; BMHP — Instalasi Farmasi</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="label">Total Surat Tercatat</div>
+      <div class="value" id="statTotal">0</div>
+    </div>
+    <div class="stat-card emas">
+      <div class="label">Total Item Obat/BMHP</div>
+      <div class="value" id="statJumlahBarang">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Jenis Obat/BMHP Berbeda</div>
+      <div class="value" id="statJenis">0</div>
+    </div>
+    <div class="stat-card emas">
+      <div class="label">Surat Bulan Ini</div>
+      <div class="value" id="statBulanIni">0</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="cariInput" placeholder="Cari nomor surat, obat/BMHP, asal instansi, penerima...">
+    <select id="filterBulan">
+      <option value="">Semua Bulan</option>
+    </select>
+    <div class="spacer"></div>
+    <button class="btn btn-luar" id="btnCetak">🖨️ Cetak</button>
+    <button class="btn btn-luar" id="btnExport">⬇️ Ekspor CSV</button>
+    <button class="btn btn-luar" id="btnUbahApi" title="Atur alamat API Apps Script">⚙️ API</button>
+    <button class="btn btn-primer" id="btnTambah">＋ Catat Surat Masuk</button>
+  </div>
+
+  <div class="table-wrap">
+    <table id="tabelData">
+      <thead>
+        <tr>
+          <th>Tgl Surat</th>
+          <th>No. Surat SBBK</th>
+          <th>Asal Instansi</th>
+          <th>Nama Obat/BMHP KAB</th>
+          <th>Jumlah</th>
+          <th>Satuan</th>
+          <th>Tgl Terima</th>
+          <th>Penerima</th>
+          <th>Keterangan</th>
+          <th class="no-print">Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="tabelBody">
+        <tr><td colspan="10" class="kosong">Memuat data...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>Aplikasi Rekap Surat Masuk SBBK Obat &amp; BMHP · Data tersimpan di Google Sheets</footer>
+</div>
+
+<!-- ================= MODAL FORM ================= -->
+<div class="overlay" id="overlayForm">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modalTitle">Catat Surat Masuk SBBK</h2>
+      <button id="btnTutupModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="formSurat">
+        <input type="hidden" id="rowIndex">
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="required">Tanggal Surat</label>
+            <input type="date" id="tanggalSurat" required>
+          </div>
+          <div class="form-field">
+            <label class="required">Nomor Surat SBBK</label>
+            <input type="text" id="nomorSurat" placeholder="mis. 445/SBBK/123/2026" required>
+          </div>
+          <div class="form-field">
+            <label>Asal Instansi</label>
+            <input type="text" id="asalInstansi" placeholder="mis. Dinas Kesehatan Provinsi">
+          </div>
+          <div class="form-field">
+            <label>Perihal</label>
+            <input type="text" id="perihal" placeholder="mis. Droping Obat Program TB">
+          </div>
+          <div class="form-field full datalist-wrap">
+            <label class="required">Nama Obat/BMHP KAB</label>
+            <input type="text" id="namaObat" list="listMasterObat" placeholder="Ketik atau pilih dari daftar..." required autocomplete="off">
+            <datalist id="listMasterObat"></datalist>
+            <div class="tambah-master">Tidak ada di daftar? <a id="linkTambahMaster">+ Tambahkan ke daftar master</a></div>
+          </div>
+          <div class="form-field">
+            <label class="required">Jumlah</label>
+            <input type="number" id="jumlah" min="1" step="1" required>
+          </div>
+          <div class="form-field">
+            <label>Satuan</label>
+            <select id="satuan"></select>
+          </div>
+          <div class="form-field">
+            <label>Tanggal Terima</label>
+            <input type="date" id="tanggalTerima">
+          </div>
+          <div class="form-field">
+            <label>Nama Penerima</label>
+            <input type="text" id="namaPenerima" placeholder="mis. Apt. Siti Rahma, S.Farm">
+          </div>
+          <div class="form-field">
+            <label>Jabatan Penerima</label>
+            <input type="text" id="jabatanPenerima" placeholder="mis. Kepala Instalasi Farmasi">
+          </div>
+          <div class="form-field full">
+            <label>Keterangan</label>
+            <textarea id="keterangan" placeholder="Catatan tambahan (opsional)"></textarea>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-luar" id="btnBatal">Batal</button>
+      <button class="btn btn-primer" id="btnSimpan">💾 Simpan</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* =====================================================================
+   KONFIGURASI API
+   Isi dengan URL deployment Web App Apps Script Anda, contoh:
+   'https://script.google.com/macros/s/AKfycb.../exec'
+   Bisa juga dikosongkan di sini dan diisi lewat kotak pengaturan
+   yang muncul otomatis saat halaman pertama dibuka (tersimpan di
+   localStorage browser masing-masing staf).
+===================================================================== */
+let APPS_SCRIPT_URL = localStorage.getItem('sbbk_api_url') || '';
+
+let STATE = { records: [], masterObat: [], satuanList: [], settings: {} };
+
+document.addEventListener('DOMContentLoaded', init);
+
+function init(){
+  document.getElementById('btnTambah').onclick = () => openForm();
+  document.getElementById('btnTutupModal').onclick = closeForm;
+  document.getElementById('btnBatal').onclick = closeForm;
+  document.getElementById('btnSimpan').onclick = simpanData;
+  document.getElementById('cariInput').oninput = renderTabel;
+  document.getElementById('filterBulan').onchange = renderTabel;
+  document.getElementById('btnCetak').onclick = () => window.print();
+  document.getElementById('btnExport').onclick = exportCsv;
+  document.getElementById('linkTambahMaster').onclick = tambahMaster;
+  document.getElementById('btnUbahApi').onclick = promptApiUrl;
+
+  if (!APPS_SCRIPT_URL){
+    hideLoading();
+    promptApiUrl(true);
+    return;
+  }
+  muatData();
+}
+
+function promptApiUrl(pertamaKali){
+  const pesan = pertamaKali
+    ? 'Aplikasi ini butuh alamat API (URL deployment Apps Script Anda) agar bisa menyimpan data ke Google Sheets.\n\nTempelkan URL Web App Apps Script (diakhiri /exec):'
+    : 'Ubah alamat API (URL deployment Apps Script):';
+  const url = prompt(pesan, APPS_SCRIPT_URL || 'https://script.google.com/macros/s/XXXXXXXX/exec');
+  if (url && url.trim()){
+    APPS_SCRIPT_URL = url.trim();
+    localStorage.setItem('sbbk_api_url', APPS_SCRIPT_URL);
+    showLoading();
+    muatData();
+  }
+}
+
+function muatData(){
+  showLoading();
+  fetch(APPS_SCRIPT_URL + '?action=data')
+    .then(r => r.json())
+    .then(res => {
+      if (!res.success) throw new Error(res.error || 'Gagal memuat data.');
+      onInitialData(res);
+    })
+    .catch(onError);
+}
+
+function apiPost(body){
+  return fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // hindari CORS preflight
+    body: JSON.stringify(body)
+  }).then(r => r.json()).then(res => {
+    if (!res.success) throw new Error(res.error || 'Terjadi kesalahan pada server.');
+    return res;
+  });
+}
+
+function onInitialData(data){
+  STATE.records = data.records || [];
+  STATE.masterObat = data.masterObat || [];
+  STATE.satuanList = data.satuanList || [];
+  STATE.settings = data.settings || {};
+
+  if (STATE.settings.nama_instansi) {
+    document.getElementById('judulInstansi').textContent = STATE.settings.nama_instansi;
+  }
+
+  const dl = document.getElementById('listMasterObat');
+  dl.innerHTML = STATE.masterObat.map(o => `<option value="${escapeHtml(o)}">`).join('');
+
+  const satSel = document.getElementById('satuan');
+  satSel.innerHTML = '<option value="">— pilih —</option>' + STATE.satuanList.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+
+  buildFilterBulan();
+  renderTabel();
+  hideLoading();
+}
+
+function onError(err){
+  hideLoading();
+  const msg = err && err.message ? err.message : String(err);
+  showToast('Terjadi kesalahan: ' + msg + ' — cek alamat API lewat tombol ⚙️ API.', true);
+  const tbody = document.getElementById('tabelBody');
+  if (tbody && tbody.children.length && tbody.children[0].textContent.indexOf('Memuat data') !== -1){
+    tbody.innerHTML = `<tr><td colspan="10"><div class="kosong"><div class="ikon">⚠️</div>Gagal terhubung ke API.<br>Klik tombol <strong>⚙️ API</strong> di atas untuk memeriksa/mengisi alamat Web App Apps Script Anda.</div></td></tr>`;
+  }
+}
+
+function hideLoading(){ document.getElementById('loadingVeil').classList.add('hide'); }
+function showLoading(){ document.getElementById('loadingVeil').classList.remove('hide'); }
+
+function escapeHtml(str){
+  return (str === null || str === undefined) ? '' : String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatTanggalTampil(iso){
+  if(!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  const bulan = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  return d.getDate() + ' ' + bulan[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+function buildFilterBulan(){
+  const sel = document.getElementById('filterBulan');
+  const bulanSet = new Set();
+  STATE.records.forEach(r => {
+    if (r.tanggalSurat) bulanSet.add(String(r.tanggalSurat).slice(0,7));
+  });
+  const sorted = Array.from(bulanSet).sort().reverse();
+  const namaBulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  sel.innerHTML = '<option value="">Semua Bulan</option>' + sorted.map(ym => {
+    const [y,m] = ym.split('-');
+    return `<option value="${ym}">${namaBulan[parseInt(m,10)-1]} ${y}</option>`;
+  }).join('');
+}
+
+function renderTabel(){
+  const q = document.getElementById('cariInput').value.trim().toLowerCase();
+  const bulan = document.getElementById('filterBulan').value;
+  let rows = STATE.records.filter(r => {
+    if (bulan && !(String(r.tanggalSurat).slice(0,7) === bulan)) return false;
+    if (!q) return true;
+    const gabung = [r.nomorSurat, r.namaObat, r.asalInstansi, r.namaPenerima, r.perihal, r.keterangan].join(' ').toLowerCase();
+    return gabung.includes(q);
+  });
+
+  const tbody = document.getElementById('tabelBody');
+  if (rows.length === 0){
+    tbody.innerHTML = `<tr><td colspan="10"><div class="kosong"><div class="ikon">📭</div>Belum ada data yang cocok.<br>Klik <strong>“Catat Surat Masuk”</strong> untuk menambahkan data pertama.</div></td></tr>`;
+  } else {
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${formatTanggalTampil(r.tanggalSurat)}</td>
+        <td>${escapeHtml(r.nomorSurat)}</td>
+        <td>${escapeHtml(r.asalInstansi)}</td>
+        <td><span class="pill">${escapeHtml(r.namaObat)}</span></td>
+        <td class="num">${escapeHtml(r.jumlah)}</td>
+        <td>${escapeHtml(r.satuan)}</td>
+        <td>${formatTanggalTampil(r.tanggalTerima)}</td>
+        <td>${escapeHtml(r.namaPenerima)}</td>
+        <td>${escapeHtml(r.keterangan)}</td>
+        <td class="aksi-cell no-print">
+          <button class="btn btn-luar btn-kecil" onclick="editRow(${r.rowIndex})">✎ Ubah</button>
+          <button class="btn btn-bahaya btn-kecil" onclick="hapusRow(${r.rowIndex})">🗑</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  // statistik (berdasar hasil filter pencarian saat ini kalau ada pencarian aktif, kalau tidak: semua data)
+  const basis = STATE.records;
+  document.getElementById('statTotal').textContent = basis.length;
+  document.getElementById('statJumlahBarang').textContent = basis.reduce((a,r)=>a+(Number(r.jumlah)||0),0).toLocaleString('id-ID');
+  document.getElementById('statJenis').textContent = new Set(basis.map(r=>r.namaObat)).size;
+  const now = new Date();
+  const ymNow = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  document.getElementById('statBulanIni').textContent = basis.filter(r => String(r.tanggalSurat).slice(0,7) === ymNow).length;
+}
+
+function openForm(record){
+  document.getElementById('formSurat').reset();
+  document.getElementById('rowIndex').value = '';
+  document.getElementById('modalTitle').textContent = record ? 'Ubah Data Surat Masuk' : 'Catat Surat Masuk SBBK';
+  if (record){
+    document.getElementById('rowIndex').value = record.rowIndex;
+    document.getElementById('tanggalSurat').value = record.tanggalSurat || '';
+    document.getElementById('nomorSurat').value = record.nomorSurat || '';
+    document.getElementById('asalInstansi').value = record.asalInstansi || '';
+    document.getElementById('perihal').value = record.perihal || '';
+    document.getElementById('namaObat').value = record.namaObat || '';
+    document.getElementById('jumlah').value = record.jumlah || '';
+    document.getElementById('satuan').value = record.satuan || '';
+    document.getElementById('tanggalTerima').value = record.tanggalTerima || '';
+    document.getElementById('namaPenerima').value = record.namaPenerima || '';
+    document.getElementById('jabatanPenerima').value = record.jabatanPenerima || '';
+    document.getElementById('keterangan').value = record.keterangan || '';
+  }
+  document.getElementById('overlayForm').classList.add('show');
+}
+function closeForm(){ document.getElementById('overlayForm').classList.remove('show'); }
+
+function editRow(rowIndex){
+  const rec = STATE.records.find(r => r.rowIndex === rowIndex);
+  if (rec) openForm(rec);
+}
+
+function hapusRow(rowIndex){
+  const rec = STATE.records.find(r => r.rowIndex === rowIndex);
+  const label = rec ? (rec.nomorSurat + ' - ' + rec.namaObat) : 'data ini';
+  if (!confirm('Hapus data "' + label + '"? Tindakan ini tidak bisa dibatalkan.')) return;
+  showLoading();
+  apiPost({ action: 'delete', rowIndex: rowIndex })
+    .then(res => { STATE.records = res.records; buildFilterBulan(); renderTabel(); hideLoading(); showToast('Data berhasil dihapus.'); })
+    .catch(err => { hideLoading(); onError(err); });
+}
+
+function simpanData(){
+  const payload = {
+    tanggalSurat: document.getElementById('tanggalSurat').value,
+    nomorSurat: document.getElementById('nomorSurat').value.trim(),
+    asalInstansi: document.getElementById('asalInstansi').value.trim(),
+    perihal: document.getElementById('perihal').value.trim(),
+    namaObat: document.getElementById('namaObat').value.trim(),
+    jumlah: document.getElementById('jumlah').value,
+    satuan: document.getElementById('satuan').value,
+    tanggalTerima: document.getElementById('tanggalTerima').value,
+    namaPenerima: document.getElementById('namaPenerima').value.trim(),
+    jabatanPenerima: document.getElementById('jabatanPenerima').value.trim(),
+    keterangan: document.getElementById('keterangan').value.trim()
+  };
+  if (!payload.tanggalSurat || !payload.nomorSurat || !payload.namaObat || !payload.jumlah){
+    showToast('Mohon lengkapi kolom bertanda (*) terlebih dahulu.', true);
+    return;
+  }
+  const rowIndex = document.getElementById('rowIndex').value;
+  showLoading();
+  const onDone = res => {
+    STATE.records = res.records;
+    buildFilterBulan();
+    renderTabel();
+    closeForm();
+    hideLoading();
+    showToast('Data berhasil disimpan.');
+  };
+  const action = rowIndex ? 'update' : 'add';
+  apiPost({ action: action, rowIndex: rowIndex ? Number(rowIndex) : undefined, payload: payload })
+    .then(onDone)
+    .catch(err => { hideLoading(); onError(err); });
+}
+
+function tambahMaster(e){
+  e.preventDefault();
+  const nama = document.getElementById('namaObat').value.trim();
+  if (!nama){ showToast('Ketik dahulu nama obat/BMHP pada kolom di atas.', true); return; }
+  showLoading();
+  apiPost({ action: 'addMaster', nama: nama })
+    .then(res => {
+      STATE.masterObat = res.masterObat;
+      document.getElementById('listMasterObat').innerHTML = res.masterObat.map(o => `<option value="${escapeHtml(o)}">`).join('');
+      hideLoading();
+      showToast('"' + nama + '" ditambahkan ke daftar master.');
+    })
+    .catch(err => { hideLoading(); onError(err); });
+}
+
+function exportCsv(){
+  const rows = STATE.records;
+  if (rows.length === 0){ showToast('Tidak ada data untuk diekspor.', true); return; }
+  const header = ['Tanggal Surat','Nomor Surat SBBK','Asal Instansi','Perihal','Nama Obat/BMHP KAB','Jumlah','Satuan','Tanggal Terima','Nama Penerima','Jabatan Penerima','Keterangan'];
+  const lines = [header.join(',')];
+  rows.forEach(r => {
+    const vals = [r.tanggalSurat, r.nomorSurat, r.asalInstansi, r.perihal, r.namaObat, r.jumlah, r.satuan, r.tanggalTerima, r.namaPenerima, r.jabatanPenerima, r.keterangan];
+    lines.push(vals.map(v => '"' + String(v===undefined||v===null?'':v).replace(/"/g,'""') + '"').join(','));
+  });
+  const blob = new Blob(["\ufeff" + lines.join('\r\n')], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'rekap_surat_masuk_sbbk_' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function showToast(msg, isErr){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = isErr ? 'show err' : 'show';
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+</script>
+</body>
+</html>
