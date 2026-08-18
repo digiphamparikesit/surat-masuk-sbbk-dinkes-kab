@@ -335,8 +335,7 @@ function promptApiUrl(pertamaKali){
 
 function muatData(){
   showLoading();
-  fetch(APPS_SCRIPT_URL + '?action=data')
-    .then(r => r.json())
+  jsonpRequest({ action: 'data' })
     .then(res => {
       if (!res.success) throw new Error(res.error || 'Gagal memuat data.');
       onInitialData(res);
@@ -344,12 +343,56 @@ function muatData(){
     .catch(onError);
 }
 
+// ---------------------------------------------------------------
+// JSONP: memuat data lewat tag <script> (bukan fetch), supaya TIDAK
+// terblokir aturan CORS saat halaman ini diakses dari GitHub Pages
+// (domain berbeda dari script.google.com).
+// ---------------------------------------------------------------
+let _jsonpCounter = 0;
+function jsonpRequest(params){
+  return new Promise((resolve, reject) => {
+    _jsonpCounter += 1;
+    const callbackName = 'sbbkCallback_' + Date.now() + '_' + _jsonpCounter;
+    const qs = Object.keys(params)
+      .filter(k => params[k] !== undefined && params[k] !== null)
+      .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(
+        typeof params[k] === 'object' ? JSON.stringify(params[k]) : params[k]
+      ))
+      .join('&');
+
+    const script = document.createElement('script');
+    const timeoutId = setTimeout(() => {
+      cleanup();
+      reject(new Error('Waktu tunggu habis — server tidak merespons. Cek apakah URL API masih aktif.'));
+    }, 20000);
+
+    function cleanup(){
+      clearTimeout(timeoutId);
+      delete window[callbackName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    window[callbackName] = function(data){
+      cleanup();
+      resolve(data);
+    };
+    script.onerror = function(){
+      cleanup();
+      reject(new Error('Gagal memuat dari API (periksa URL API atau koneksi internet).'));
+    };
+
+    script.src = APPS_SCRIPT_URL + '?' + qs + '&callback=' + callbackName;
+    document.body.appendChild(script);
+  });
+}
+
 function apiPost(body){
-  return fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // hindari CORS preflight
-    body: JSON.stringify(body)
-  }).then(r => r.json()).then(res => {
+  const params = { action: body.action };
+  if (body.rowIndex !== undefined) params.rowIndex = body.rowIndex;
+  if (body.payload !== undefined) params.payload = JSON.stringify(body.payload);
+  if (body.nama !== undefined) params.nama = body.nama;
+
+  return jsonpRequest(params).then(res => {
     if (!res.success) throw new Error(res.error || 'Terjadi kesalahan pada server.');
     return res;
   });
