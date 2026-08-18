@@ -294,14 +294,14 @@
 
 <script>
 /* =====================================================================
-   KONFIGURASI API
-   Isi dengan URL deployment Web App Apps Script Anda, contoh:
-   'https://script.google.com/macros/s/AKfycb.../exec'
-   Bisa juga dikosongkan di sini dan diisi lewat kotak pengaturan
-   yang muncul otomatis saat halaman pertama dibuka (tersimpan di
-   localStorage browser masing-masing staf).
+   KONFIGURASI API — sudah permanen tertanam di file ini.
+   Semua orang yang membuka halaman ini (di perangkat/browser mana pun)
+   otomatis terhubung ke API/Google Sheets yang sama, tanpa perlu
+   mengisi apa pun. Kalau suatu saat URL deployment Apps Script berubah,
+   cukup ganti nilai di baris di bawah ini lalu upload ulang ke GitHub
+   (atau ubah lewat tombol ⚙️ API, tapi itu hanya berlaku di browser itu saja).
 ===================================================================== */
-let APPS_SCRIPT_URL = localStorage.getItem('sbbk_api_url') || '';
+let APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxYV2_Y4TWZz30Lwhn0FsYmBHX379Cdk9ZrXfqE2H6KeSGt_IBJYOIYrqrlPBv5BtWd/exec';
 
 let STATE = { records: [], masterObat: [], satuanList: [], settings: {} };
 
@@ -317,22 +317,15 @@ function init(){
   document.getElementById('btnCetak').onclick = () => window.print();
   document.getElementById('btnExport').onclick = exportCsv;
   document.getElementById('linkTambahMaster').onclick = tambahMaster;
-  document.getElementById('btnUbahApi').onclick = promptApiUrl;
+  document.getElementById('btnUbahApi').onclick = () => promptApiUrl(false);
 
-  if (!APPS_SCRIPT_URL){
-    hideLoading();
-    promptApiUrl(true);
-    return;
-  }
   muatData();
 }
 
 function promptApiUrl(pertamaKali){
-  const pesan = pertamaKali
-    ? 'Aplikasi ini butuh alamat API (URL deployment Apps Script Anda) agar bisa menyimpan data ke Google Sheets.\n\nTempelkan URL Web App Apps Script (diakhiri /exec):'
-    : 'Ubah alamat API (URL deployment Apps Script):';
-  const url = prompt(pesan, APPS_SCRIPT_URL || 'https://script.google.com/macros/s/XXXXXXXX/exec');
-  if (url && url.trim()){
+  const pesan = 'Ubah alamat API (URL deployment Apps Script):';
+  const url = prompt(pesan, APPS_SCRIPT_URL);
+  if (url && url.trim() && url.trim() !== APPS_SCRIPT_URL){
     APPS_SCRIPT_URL = url.trim();
     localStorage.setItem('sbbk_api_url', APPS_SCRIPT_URL);
     showLoading();
