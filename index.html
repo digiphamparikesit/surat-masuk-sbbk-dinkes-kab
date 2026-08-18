@@ -44,7 +44,7 @@
   .app-header h1{margin:0;font-size:19px;font-weight:700;letter-spacing:.3px;}
   .app-header p{margin:2px 0 0;font-size:12.5px;opacity:.85;}
 
-  .container{max-width:1240px;margin:0 auto;padding:20px 24px 60px;}
+  .container{max-width:100%;margin:0;padding:20px 28px 60px;width:100%;box-sizing:border-box;}
 
   /* ---------- STAT CARDS ---------- */
   .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:22px;}
@@ -78,11 +78,12 @@
   .btn-bahaya:hover{background:#f8d7d3;}
 
   /* ---------- TABLE ---------- */
-  .table-wrap{background:#fff;border:1px solid var(--garis);border-radius:var(--radius);overflow:hidden;}
+  .table-wrap{background:#fff;border:1px solid var(--garis);border-radius:var(--radius);overflow:auto;max-height:72vh;}
   table{width:100%;border-collapse:collapse;font-size:13px;}
   thead th{
     background:var(--hijau-pucat);color:var(--hijau-tua);text-align:left;padding:10px 12px;
     font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--garis);white-space:nowrap;
+    position:sticky;top:0;z-index:3;box-shadow:0 1px 0 var(--garis);
   }
   tbody td{padding:10px 12px;border-bottom:1px solid #eef1ee;vertical-align:top;}
   tbody tr:hover{background:#f6faf7;}
@@ -92,6 +93,19 @@
   .aksi-cell{white-space:nowrap;}
   .kosong{padding:50px 20px;text-align:center;color:var(--abu);}
   .kosong .ikon{font-size:34px;margin-bottom:8px;}
+
+  /* ---------- PAGINATION ---------- */
+  .pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 4px 0;flex-wrap:wrap;}
+  .pagination .info{font-size:12.5px;color:var(--abu);}
+  .pagination .kontrol{display:flex;align-items:center;gap:6px;}
+  .pagination button{
+    border:1px solid var(--garis);background:#fff;color:var(--tinta);border-radius:7px;padding:6px 12px;
+    font-size:12.5px;cursor:pointer;font-weight:600;
+  }
+  .pagination button:hover:not(:disabled){border-color:var(--hijau-muda);color:var(--hijau-tua);}
+  .pagination button:disabled{opacity:.4;cursor:not-allowed;}
+  .pagination button.aktif{background:var(--hijau);border-color:var(--hijau);color:#fff;}
+  .pagination .angka-halaman{display:flex;gap:4px;flex-wrap:wrap;}
 
   /* ---------- MODAL ---------- */
   .overlay{
@@ -187,6 +201,7 @@
   </div>
 
   <div class="toolbar">
+    <button class="btn btn-primer" id="btnTambah">＋ Catat Surat Masuk</button>
     <input type="text" id="cariInput" placeholder="Cari nomor surat, obat/BMHP, asal instansi, penerima...">
     <select id="filterBulan">
       <option value="">Semua Bulan</option>
@@ -195,7 +210,6 @@
     <button class="btn btn-luar" id="btnCetak">🖨️ Cetak</button>
     <button class="btn btn-luar" id="btnExport">⬇️ Ekspor CSV</button>
     <button class="btn btn-luar" id="btnUbahApi" title="Atur alamat API Apps Script">⚙️ API</button>
-    <button class="btn btn-primer" id="btnTambah">＋ Catat Surat Masuk</button>
   </div>
 
   <div class="table-wrap">
@@ -219,6 +233,8 @@
       </tbody>
     </table>
   </div>
+
+  <div class="pagination no-print" id="paginationBar"></div>
 
   <footer>Aplikasi Rekap Surat Masuk SBBK Obat &amp; BMHP · Data tersimpan di Google Sheets</footer>
 </div>
@@ -304,6 +320,8 @@
 let APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxYV2_Y4TWZz30Lwhn0FsYmBHX379Cdk9ZrXfqE2H6KeSGt_IBJYOIYrqrlPBv5BtWd/exec';
 
 let STATE = { records: [], masterObat: [], satuanList: [], settings: {} };
+const BARIS_PER_HALAMAN = 15;
+let halamanAktif = 1;
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -312,8 +330,8 @@ function init(){
   document.getElementById('btnTutupModal').onclick = closeForm;
   document.getElementById('btnBatal').onclick = closeForm;
   document.getElementById('btnSimpan').onclick = simpanData;
-  document.getElementById('cariInput').oninput = renderTabel;
-  document.getElementById('filterBulan').onchange = renderTabel;
+  document.getElementById('cariInput').oninput = () => { halamanAktif = 1; renderTabel(); };
+  document.getElementById('filterBulan').onchange = () => { halamanAktif = 1; renderTabel(); };
   document.getElementById('btnCetak').onclick = () => window.print();
   document.getElementById('btnExport').onclick = exportCsv;
   document.getElementById('linkTambahMaster').onclick = tambahMaster;
@@ -469,11 +487,18 @@ function renderTabel(){
     return gabung.includes(q);
   });
 
+  const totalBaris = rows.length;
+  const totalHalaman = Math.max(1, Math.ceil(totalBaris / BARIS_PER_HALAMAN));
+  if (halamanAktif > totalHalaman) halamanAktif = totalHalaman;
+  if (halamanAktif < 1) halamanAktif = 1;
+  const mulai = (halamanAktif - 1) * BARIS_PER_HALAMAN;
+  const rowsHalamanIni = rows.slice(mulai, mulai + BARIS_PER_HALAMAN);
+
   const tbody = document.getElementById('tabelBody');
-  if (rows.length === 0){
+  if (rowsHalamanIni.length === 0){
     tbody.innerHTML = `<tr><td colspan="10"><div class="kosong"><div class="ikon">📭</div>Belum ada data yang cocok.<br>Klik <strong>“Catat Surat Masuk”</strong> untuk menambahkan data pertama.</div></td></tr>`;
   } else {
-    tbody.innerHTML = rows.map(r => `
+    tbody.innerHTML = rowsHalamanIni.map(r => `
       <tr>
         <td>${formatTanggalTampil(r.tanggalSurat)}</td>
         <td>${escapeHtml(r.nomorSurat)}</td>
@@ -491,7 +516,9 @@ function renderTabel(){
       </tr>`).join('');
   }
 
-  // statistik (berdasar hasil filter pencarian saat ini kalau ada pencarian aktif, kalau tidak: semua data)
+  renderPagination(totalBaris, totalHalaman);
+
+  // statistik (selalu dari seluruh data, bukan hanya hasil filter/halaman ini)
   const basis = STATE.records;
   document.getElementById('statTotal').textContent = basis.length;
   document.getElementById('statJumlahBarang').textContent = basis.reduce((a,r)=>a+(Number(r.jumlah)||0),0).toLocaleString('id-ID');
@@ -499,6 +526,44 @@ function renderTabel(){
   const now = new Date();
   const ymNow = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
   document.getElementById('statBulanIni').textContent = basis.filter(r => String(r.tanggalSurat).slice(0,7) === ymNow).length;
+}
+
+function renderPagination(totalBaris, totalHalaman){
+  const bar = document.getElementById('paginationBar');
+  if (totalBaris === 0){ bar.innerHTML = ''; return; }
+
+  const mulai = (halamanAktif - 1) * BARIS_PER_HALAMAN + 1;
+  const akhir = Math.min(halamanAktif * BARIS_PER_HALAMAN, totalBaris);
+
+  // tampilkan maksimal 7 tombol angka halaman, dengan elipsis kalau banyak
+  let nomorHalaman = [];
+  const jendela = 2;
+  for (let i = 1; i <= totalHalaman; i++){
+    if (i === 1 || i === totalHalaman || (i >= halamanAktif - jendela && i <= halamanAktif + jendela)){
+      nomorHalaman.push(i);
+    }
+  }
+  let htmlAngka = '';
+  let terakhir = 0;
+  nomorHalaman.forEach(i => {
+    if (terakhir && i - terakhir > 1) htmlAngka += `<span style="padding:0 4px;color:var(--abu);">…</span>`;
+    htmlAngka += `<button class="${i === halamanAktif ? 'aktif' : ''}" onclick="gantiHalaman(${i})">${i}</button>`;
+    terakhir = i;
+  });
+
+  bar.innerHTML = `
+    <div class="info">Menampilkan ${mulai}–${akhir} dari ${totalBaris} surat</div>
+    <div class="kontrol">
+      <button onclick="gantiHalaman(${halamanAktif - 1})" ${halamanAktif <= 1 ? 'disabled' : ''}>‹ Sebelumnya</button>
+      <div class="angka-halaman">${htmlAngka}</div>
+      <button onclick="gantiHalaman(${halamanAktif + 1})" ${halamanAktif >= totalHalaman ? 'disabled' : ''}>Berikutnya ›</button>
+    </div>`;
+}
+
+function gantiHalaman(n){
+  halamanAktif = n;
+  renderTabel();
+  document.querySelector('.table-wrap').scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function openForm(record){
@@ -561,6 +626,7 @@ function simpanData(){
   const onDone = res => {
     STATE.records = res.records;
     buildFilterBulan();
+    halamanAktif = 1;
     renderTabel();
     closeForm();
     hideLoading();
