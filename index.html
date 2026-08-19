@@ -85,6 +85,9 @@
     font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--garis);white-space:nowrap;
     position:sticky;top:0;z-index:3;box-shadow:0 1px 0 var(--garis);
   }
+  thead th.th-urut{cursor:pointer;user-select:none;}
+  thead th.th-urut:hover{background:#dcefe4;}
+  thead th.th-urut #ikonUrut{font-size:10px;opacity:.85;}
   tbody td{padding:10px 12px;border-bottom:1px solid #eef1ee;vertical-align:top;}
   tbody tr:hover{background:#f6faf7;}
   tbody tr:last-child td{border-bottom:none;}
@@ -174,7 +177,7 @@
 <header class="app-header">
   <div class="lambang">💊</div>
   <div class="judul">
-    <h1 id="judulInstansi">SURAT MASUK</h1>
+    <h1 id="judulInstansi">SBBK KESEHATAN KABUPATEN</h1>
     <p>Rekap Surat Masuk SBBK Obat &amp; BMHP — Instalasi Farmasi</p>
   </div>
 </header>
@@ -207,8 +210,14 @@
   <div class="toolbar">
     <button class="btn btn-primer" id="btnTambah">＋ Catat Surat Masuk</button>
     <input type="text" id="cariInput" placeholder="Cari nomor surat, obat/BMHP, asal instansi, penerima...">
+    <select id="filterAsal">
+      <option value="">Semua Asal Instansi</option>
+    </select>
     <select id="filterBulan">
       <option value="">Semua Bulan</option>
+    </select>
+    <select id="filterTahun">
+      <option value="">Semua Tahun</option>
     </select>
     <div class="spacer"></div>
     <button class="btn btn-luar" id="btnCetak">🖨️ Cetak</button>
@@ -220,7 +229,7 @@
     <table id="tabelData">
       <thead>
         <tr>
-          <th>Tgl Surat</th>
+          <th id="thTglSurat" class="th-urut" title="Klik untuk urutkan berdasarkan Tanggal Surat">Tgl Surat <span id="ikonUrut">▲</span></th>
           <th>No. Surat SBBK</th>
           <th>Asal Instansi</th>
           <th>Nama Obat/BMHP KAB</th>
@@ -337,6 +346,7 @@ let APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxYV2_Y4TWZz30Lwh
 let STATE = { records: [], masterObat: [], satuanList: [], settings: {} };
 const BARIS_PER_HALAMAN = 15;
 let halamanAktif = 1;
+let urutTanggal = 'asc'; // default: tanggal surat terkecil (paling lama) di atas
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -347,12 +357,20 @@ function init(){
   document.getElementById('btnSimpan').onclick = simpanData;
   document.getElementById('cariInput').oninput = () => { halamanAktif = 1; renderTabel(); };
   document.getElementById('filterBulan').onchange = () => { halamanAktif = 1; renderTabel(); };
+  document.getElementById('filterTahun').onchange = () => { halamanAktif = 1; renderTabel(); };
+  document.getElementById('filterAsal').onchange = () => { halamanAktif = 1; renderTabel(); };
   document.getElementById('btnCetak').onclick = () => window.print();
   document.getElementById('btnExport').onclick = exportCsv;
   document.getElementById('linkTambahMaster').onclick = tambahMaster;
   document.getElementById('btnUbahApi').onclick = () => promptApiUrl(false);
   document.getElementById('jumlah').oninput = hitungNilaiForm;
   document.getElementById('hargaSatuan').oninput = hitungNilaiForm;
+  document.getElementById('thTglSurat').onclick = () => {
+    urutTanggal = (urutTanggal === 'asc') ? 'desc' : 'asc';
+    document.getElementById('ikonUrut').textContent = urutTanggal === 'asc' ? '▲' : '▼';
+    halamanAktif = 1;
+    renderTabel();
+  };
 
   muatData();
 }
@@ -450,6 +468,8 @@ function onInitialData(data){
   satSel.innerHTML = '<option value="">— pilih —</option>' + STATE.satuanList.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
 
   buildFilterBulan();
+  buildFilterTahun();
+  buildFilterAsal();
   renderTabel();
   hideLoading();
 }
@@ -487,6 +507,7 @@ function formatTanggalTampil(iso){
 
 function buildFilterBulan(){
   const sel = document.getElementById('filterBulan');
+  const nilaiSekarang = sel.value;
   const bulanSet = new Set();
   STATE.records.forEach(r => {
     if (r.tanggalSurat) bulanSet.add(String(r.tanggalSurat).slice(0,7));
@@ -497,16 +518,55 @@ function buildFilterBulan(){
     const [y,m] = ym.split('-');
     return `<option value="${ym}">${namaBulan[parseInt(m,10)-1]} ${y}</option>`;
   }).join('');
+  if (sorted.includes(nilaiSekarang)) sel.value = nilaiSekarang;
+}
+
+function buildFilterTahun(){
+  const sel = document.getElementById('filterTahun');
+  const nilaiSekarang = sel.value;
+  const tahunSet = new Set();
+  STATE.records.forEach(r => {
+    if (r.tanggalSurat) tahunSet.add(String(r.tanggalSurat).slice(0,4));
+  });
+  const sorted = Array.from(tahunSet).filter(Boolean).sort().reverse();
+  sel.innerHTML = '<option value="">Semua Tahun</option>' + sorted.map(th => `<option value="${th}">${th}</option>`).join('');
+  if (sorted.includes(nilaiSekarang)) sel.value = nilaiSekarang;
+}
+
+function buildFilterAsal(){
+  const sel = document.getElementById('filterAsal');
+  const nilaiSekarang = sel.value;
+  const asalSet = new Set();
+  STATE.records.forEach(r => {
+    if (r.asalInstansi && String(r.asalInstansi).trim()) asalSet.add(String(r.asalInstansi).trim());
+  });
+  const sorted = Array.from(asalSet).sort((a,b) => a.localeCompare(b, 'id'));
+  sel.innerHTML = '<option value="">Semua Asal Instansi</option>' + sorted.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
+  if (sorted.includes(nilaiSekarang)) sel.value = nilaiSekarang;
 }
 
 function renderTabel(){
   const q = document.getElementById('cariInput').value.trim().toLowerCase();
   const bulan = document.getElementById('filterBulan').value;
+  const tahun = document.getElementById('filterTahun').value;
+  const asal = document.getElementById('filterAsal').value;
+
   let rows = STATE.records.filter(r => {
     if (bulan && !(String(r.tanggalSurat).slice(0,7) === bulan)) return false;
+    if (tahun && !(String(r.tanggalSurat).slice(0,4) === tahun)) return false;
+    if (asal && String(r.asalInstansi || '').trim() !== asal) return false;
     if (!q) return true;
     const gabung = [r.nomorSurat, r.namaObat, r.asalInstansi, r.namaPenerima, r.perihal, r.keterangan].join(' ').toLowerCase();
     return gabung.includes(q);
+  });
+
+  // urutkan berdasarkan Tanggal Surat sesuai arah yang dipilih (klik header)
+  rows = rows.slice().sort((a, b) => {
+    const ta = a.tanggalSurat || '';
+    const tb = b.tanggalSurat || '';
+    if (ta === tb) return 0;
+    const hasil = ta < tb ? -1 : 1;
+    return urutTanggal === 'asc' ? hasil : -hasil;
   });
 
   const totalBaris = rows.length;
@@ -542,8 +602,9 @@ function renderTabel(){
 
   renderPagination(totalBaris, totalHalaman);
 
-  // statistik (selalu dari seluruh data, bukan hanya hasil filter/halaman ini)
-  const basis = STATE.records;
+  // statistik SEKARANG mengikuti hasil filter aktif (pencarian, asal instansi,
+  // bulan, tahun) — bukan lagi selalu dari seluruh data.
+  const basis = rows;
   document.getElementById('statTotal').textContent = basis.length;
   document.getElementById('statJumlahBarang').textContent = basis.reduce((a,r)=>a+(Number(r.jumlah)||0),0).toLocaleString('id-ID');
   document.getElementById('statJenis').textContent = new Set(basis.map(r=>r.namaObat)).size;
@@ -636,7 +697,7 @@ function hapusRow(rowIndex){
   if (!confirm('Hapus data "' + label + '"? Tindakan ini tidak bisa dibatalkan.')) return;
   showLoading();
   apiPost({ action: 'delete', rowIndex: rowIndex })
-    .then(res => { STATE.records = res.records; buildFilterBulan(); renderTabel(); hideLoading(); showToast('Data berhasil dihapus.'); })
+    .then(res => { STATE.records = res.records; buildFilterBulan(); buildFilterTahun(); buildFilterAsal(); renderTabel(); hideLoading(); showToast('Data berhasil dihapus.'); })
     .catch(err => { hideLoading(); onError(err); });
 }
 
@@ -664,6 +725,8 @@ function simpanData(){
   const onDone = res => {
     STATE.records = res.records;
     buildFilterBulan();
+    buildFilterTahun();
+    buildFilterAsal();
     halamanAktif = 1;
     renderTabel();
     closeForm();
