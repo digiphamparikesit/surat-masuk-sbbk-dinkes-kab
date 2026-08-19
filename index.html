@@ -172,7 +172,12 @@
 </head>
 <body>
 
-<div class="loading-veil" id="loadingVeil"><div class="spinner"></div></div>
+<div class="loading-veil" id="loadingVeil">
+  <div style="text-align:center;">
+    <div class="spinner" style="margin:0 auto 10px;"></div>
+    <div id="loadingPesan" style="font-size:12.5px;color:var(--abu);max-width:260px;">Memproses...</div>
+  </div>
+</div>
 
 <header class="app-header">
   <div class="lambang">💊</div>
@@ -414,10 +419,15 @@ function jsonpRequest(params){
       .join('&');
 
     const script = document.createElement('script');
+    // Apps Script kadang butuh waktu jauh lebih lama dari biasanya untuk
+    // merespons (ini karakteristik bawaan Google, terutama di akun Google
+    // pribadi/gratis) — bukan berarti gagal, cuma lambat. Timeout dibuat
+    // cukup longgar (70 detik) supaya proses yang lambat-tapi-berhasil
+    // tidak keburu ditandai error di browser.
     const timeoutId = setTimeout(() => {
       cleanup();
-      reject(new Error('Waktu tunggu habis — server tidak merespons. Cek apakah URL API masih aktif.'));
-    }, 35000);
+      reject(new Error('Waktu tunggu habis (70 detik) — server Google sedang lambat merespons. Data mungkin tetap tersimpan, silakan cek/refresh sebelum mengulang.'));
+    }, 70000);
 
     function cleanup(){
       clearTimeout(timeoutId);
@@ -484,8 +494,20 @@ function onError(err){
   }
 }
 
-function hideLoading(){ document.getElementById('loadingVeil').classList.add('hide'); }
-function showLoading(){ document.getElementById('loadingVeil').classList.remove('hide'); }
+let _loadingLambatTimer = null;
+function hideLoading(){
+  document.getElementById('loadingVeil').classList.add('hide');
+  clearTimeout(_loadingLambatTimer);
+  document.getElementById('loadingPesan').textContent = 'Memproses...';
+}
+function showLoading(){
+  document.getElementById('loadingVeil').classList.remove('hide');
+  document.getElementById('loadingPesan').textContent = 'Memproses...';
+  clearTimeout(_loadingLambatTimer);
+  _loadingLambatTimer = setTimeout(() => {
+    document.getElementById('loadingPesan').textContent = 'Google sedang lambat merespons, mohon tunggu — proses tetap berjalan normal, jangan tutup halaman ini.';
+  }, 8000);
+}
 
 function escapeHtml(str){
   return (str === null || str === undefined) ? '' : String(str)
