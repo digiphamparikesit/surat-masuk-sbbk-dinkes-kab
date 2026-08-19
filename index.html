@@ -396,6 +396,25 @@ function muatData(){
     .catch(onError);
 }
 
+// Dipanggil setelah aksi tambah/ubah/hapus BERHASIL, untuk mengambil ulang
+// seluruh data terbaru dari server sebagai permintaan TERPISAH (bukan lagi
+// digabung dalam satu respons dengan aksi simpan). Ini membuat proses
+// simpan jadi jauh lebih cepat & tidak mudah timeout, apa pun besar datanya.
+function muatUlangSetelahAksi(){
+  return jsonpRequest({ action: 'data' })
+    .then(res => {
+      if (!res.success) throw new Error(res.error || 'Data tersimpan, tapi gagal memuat ulang daftar. Coba refresh manual.');
+      STATE.records = res.records || [];
+      STATE.masterObat = res.masterObat || STATE.masterObat;
+      buildFilterBulan();
+      buildFilterTahun();
+      buildFilterAsal();
+      renderTabel();
+      hideLoading();
+    })
+    .catch(err => { hideLoading(); onError(err); });
+}
+
 // ---------------------------------------------------------------
 // JSONP: memuat data lewat tag <script> (bukan fetch), supaya TIDAK
 // terblokir aturan CORS saat halaman ini diakses dari GitHub Pages
@@ -417,7 +436,7 @@ function jsonpRequest(params){
     const timeoutId = setTimeout(() => {
       cleanup();
       reject(new Error('Waktu tunggu habis — server tidak merespons. Cek apakah URL API masih aktif.'));
-    }, 20000);
+    }, 35000);
 
     function cleanup(){
       clearTimeout(timeoutId);
@@ -602,16 +621,32 @@ function renderTabel(){
 
   renderPagination(totalBaris, totalHalaman);
 
-  // statistik SEKARANG mengikuti hasil filter aktif (pencarian, asal instansi,
-  // bulan, tahun) — bukan lagi selalu dari seluruh data.
+  // statistik mengikuti hasil filter aktif (pencarian, asal instansi, bulan, tahun).
+  // PENTING: "surat" dihitung berdasarkan NOMOR SURAT SBBK yang unik/berbeda,
+  // bukan jumlah baris — karena 1 surat SBBK bisa berisi lebih dari 1 item barang
+  // (jadi lebih dari 1 baris di tabel, tapi tetap dihitung 1 surat).
   const basis = rows;
-  document.getElementById('statTotal').textContent = basis.length;
+  document.getElementById('statTotal').textContent = hitungNomorSuratUnik(basis);
   document.getElementById('statJumlahBarang').textContent = basis.reduce((a,r)=>a+(Number(r.jumlah)||0),0).toLocaleString('id-ID');
   document.getElementById('statJenis').textContent = new Set(basis.map(r=>r.namaObat)).size;
   const now = new Date();
   const ymNow = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-  document.getElementById('statBulanIni').textContent = basis.filter(r => String(r.tanggalSurat).slice(0,7) === ymNow).length;
+  const suratBulanIni = basis.filter(r => String(r.tanggalSurat).slice(0,7) === ymNow);
+  document.getElementById('statBulanIni').textContent = hitungNomorSuratUnik(suratBulanIni);
   document.getElementById('statNilaiTransaksi').textContent = formatRupiah(basis.reduce((a,r)=>a+(Number(r.nilaiTransaksi)||0),0));
+}
+
+// Hitung jumlah NOMOR SURAT SBBK yang unik/berbeda dari sekumpulan baris data
+// (dipakai untuk statistik "Total Surat Tercatat" & "Surat Bulan Ini", supaya
+// 1 surat dengan banyak item barang tetap terhitung sebagai 1 surat, bukan
+// sebanyak jumlah baris/item-nya).
+function hitungNomorSuratUnik(daftarBaris){
+  const set = new Set();
+  daftarBaris.forEach(r => {
+    const nomor = String(r.nomorSurat || '').trim();
+    if (nomor) set.add(nomor.toLowerCase());
+  });
+  return set.size;
 }
 
 function renderPagination(totalBaris, totalHalaman){
@@ -697,7 +732,10 @@ function hapusRow(rowIndex){
   if (!confirm('Hapus data "' + label + '"? Tindakan ini tidak bisa dibatalkan.')) return;
   showLoading();
   apiPost({ action: 'delete', rowIndex: rowIndex })
-    .then(res => { STATE.records = res.records; buildFilterBulan(); buildFilterTahun(); buildFilterAsal(); renderTabel(); hideLoading(); showToast('Data berhasil dihapus.'); })
+    .then(() => {
+      showToast('Data berhasil dihapus.');
+      return muatUlangSetelahAksi();
+    })
     .catch(err => { hideLoading(); onError(err); });
 }
 
@@ -722,20 +760,14 @@ function simpanData(){
   }
   const rowIndex = document.getElementById('rowIndex').value;
   showLoading();
-  const onDone = res => {
-    STATE.records = res.records;
-    buildFilterBulan();
-    buildFilterTahun();
-    buildFilterAsal();
-    halamanAktif = 1;
-    renderTabel();
-    closeForm();
-    hideLoading();
-    showToast('Data berhasil disimpan.');
-  };
   const action = rowIndex ? 'update' : 'add';
   apiPost({ action: action, rowIndex: rowIndex ? Number(rowIndex) : undefined, payload: payload })
-    .then(onDone)
+    .then(() => {
+      closeForm();
+      halamanAktif = 1;
+      showToast('Data berhasil disimpan.');
+      return muatUlangSetelahAksi();
+    })
     .catch(err => { hideLoading(); onError(err); });
 }
 
