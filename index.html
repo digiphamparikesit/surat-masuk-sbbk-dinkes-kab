@@ -396,25 +396,6 @@ function muatData(){
     .catch(onError);
 }
 
-// Dipanggil setelah aksi tambah/ubah/hapus BERHASIL, untuk mengambil ulang
-// seluruh data terbaru dari server sebagai permintaan TERPISAH (bukan lagi
-// digabung dalam satu respons dengan aksi simpan). Ini membuat proses
-// simpan jadi jauh lebih cepat & tidak mudah timeout, apa pun besar datanya.
-function muatUlangSetelahAksi(){
-  return jsonpRequest({ action: 'data' })
-    .then(res => {
-      if (!res.success) throw new Error(res.error || 'Data tersimpan, tapi gagal memuat ulang daftar. Coba refresh manual.');
-      STATE.records = res.records || [];
-      STATE.masterObat = res.masterObat || STATE.masterObat;
-      buildFilterBulan();
-      buildFilterTahun();
-      buildFilterAsal();
-      renderTabel();
-      hideLoading();
-    })
-    .catch(err => { hideLoading(); onError(err); });
-}
-
 // ---------------------------------------------------------------
 // JSONP: memuat data lewat tag <script> (bukan fetch), supaya TIDAK
 // terblokir aturan CORS saat halaman ini diakses dari GitHub Pages
@@ -733,8 +714,16 @@ function hapusRow(rowIndex){
   showLoading();
   apiPost({ action: 'delete', rowIndex: rowIndex })
     .then(() => {
+      // Update lokal langsung: buang baris yang dihapus, lalu geser mundur
+      // rowIndex baris-baris SETELAHNYA sebanyak 1 (karena baris di sheet
+      // ikut naik posisinya setelah 1 baris dihapus). Tanpa perlu request lagi.
+      STATE.records = STATE.records
+        .filter(r => r.rowIndex !== rowIndex)
+        .map(r => r.rowIndex > rowIndex ? Object.assign({}, r, { rowIndex: r.rowIndex - 1 }) : r);
+      buildFilterBulan(); buildFilterTahun(); buildFilterAsal();
+      renderTabel();
+      hideLoading();
       showToast('Data berhasil dihapus.');
-      return muatUlangSetelahAksi();
     })
     .catch(err => { hideLoading(); onError(err); });
 }
@@ -758,15 +747,34 @@ function simpanData(){
     showToast('Mohon lengkapi kolom bertanda (*) terlebih dahulu.', true);
     return;
   }
-  const rowIndex = document.getElementById('rowIndex').value;
+  const rowIndexStr = document.getElementById('rowIndex').value;
+  const isUpdate = !!rowIndexStr;
   showLoading();
-  const action = rowIndex ? 'update' : 'add';
-  apiPost({ action: action, rowIndex: rowIndex ? Number(rowIndex) : undefined, payload: payload })
-    .then(() => {
-      closeForm();
+  apiPost({ action: isUpdate ? 'update' : 'add', rowIndex: isUpdate ? Number(rowIndexStr) : undefined, payload: payload })
+    .then(res => {
+      const nilaiTransaksi = (Number(payload.jumlah) || 0) * (Number(payload.hargaSatuan) || 0);
+      if (isUpdate){
+        // Update lokal: timpa field-field record yang sama tanpa perlu ambil ulang semuanya.
+        const idx = STATE.records.findIndex(r => r.rowIndex === Number(rowIndexStr));
+        if (idx !== -1){
+          STATE.records[idx] = Object.assign({}, STATE.records[idx], payload, { nilaiTransaksi: nilaiTransaksi });
+        }
+      } else {
+        // Tambah lokal: server mengembalikan id & posisi baris (rowIndex) baris baru.
+        const info = (res && res.data) || {};
+        STATE.records.push(Object.assign({}, payload, {
+          id: info.id,
+          nilaiTransaksi: info.nilaiTransaksi !== undefined ? info.nilaiTransaksi : nilaiTransaksi,
+          rowIndex: info.rowIndex,
+          waktuInput: new Date().toISOString().slice(0,10)
+        }));
+      }
+      buildFilterBulan(); buildFilterTahun(); buildFilterAsal();
       halamanAktif = 1;
+      renderTabel();
+      closeForm();
+      hideLoading();
       showToast('Data berhasil disimpan.');
-      return muatUlangSetelahAksi();
     })
     .catch(err => { hideLoading(); onError(err); });
 }
@@ -778,10 +786,14 @@ function tambahMaster(e){
   showLoading();
   apiPost({ action: 'addMaster', nama: nama })
     .then(res => {
-      STATE.masterObat = res.masterObat;
-      document.getElementById('listMasterObat').innerHTML = res.masterObat.map(o => `<option value="${escapeHtml(o)}">`).join('');
+      const namaTersimpan = (res && res.nama) ? res.nama : nama;
+      if (!STATE.masterObat.some(o => o.toLowerCase() === namaTersimpan.toLowerCase())){
+        STATE.masterObat.push(namaTersimpan);
+        STATE.masterObat.sort();
+      }
+      document.getElementById('listMasterObat').innerHTML = STATE.masterObat.map(o => `<option value="${escapeHtml(o)}">`).join('');
       hideLoading();
-      showToast('"' + nama + '" ditambahkan ke daftar master.');
+      showToast('"' + namaTersimpan + '" ditambahkan ke daftar master.');
     })
     .catch(err => { hideLoading(); onError(err); });
 }
