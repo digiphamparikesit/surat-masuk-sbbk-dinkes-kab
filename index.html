@@ -174,7 +174,7 @@
 <header class="app-header">
   <div class="lambang">💊</div>
   <div class="judul">
-    <h1 id="judulInstansi">DINAS KESEHATAN KABUPATEN</h1>
+    <h1 id="judulInstansi">SURAT MASUK</h1>
     <p>Rekap Surat Masuk SBBK Obat &amp; BMHP — Instalasi Farmasi</p>
   </div>
 </header>
@@ -197,6 +197,10 @@
     <div class="stat-card emas">
       <div class="label">Surat Bulan Ini</div>
       <div class="value" id="statBulanIni">0</div>
+    </div>
+    <div class="stat-card emas">
+      <div class="label">Total Nilai Transaksi</div>
+      <div class="value" id="statNilaiTransaksi" style="font-size:19px;">Rp 0</div>
     </div>
   </div>
 
@@ -222,6 +226,8 @@
           <th>Nama Obat/BMHP KAB</th>
           <th>Jumlah</th>
           <th>Satuan</th>
+          <th>Harga Satuan</th>
+          <th>Nilai Transaksi</th>
           <th>Tgl Terima</th>
           <th>Penerima</th>
           <th>Keterangan</th>
@@ -229,7 +235,7 @@
         </tr>
       </thead>
       <tbody id="tabelBody">
-        <tr><td colspan="10" class="kosong">Memuat data...</td></tr>
+        <tr><td colspan="12" class="kosong">Memuat data...</td></tr>
       </tbody>
     </table>
   </div>
@@ -279,6 +285,15 @@
           <div class="form-field">
             <label>Satuan</label>
             <select id="satuan"></select>
+          </div>
+          <div class="form-field">
+            <label>Harga Satuan (Rp)</label>
+            <input type="number" id="hargaSatuan" min="0" step="1" placeholder="mis. 25597">
+          </div>
+          <div class="form-field">
+            <label>Nilai Transaksi (Rp)</label>
+            <input type="text" id="nilaiTransaksiTampil" readonly style="background:#f4f6f4;font-weight:700;color:var(--hijau-tua);">
+            <div class="hint">Otomatis = Jumlah × Harga Satuan</div>
           </div>
           <div class="form-field">
             <label>Tanggal Terima</label>
@@ -336,6 +351,8 @@ function init(){
   document.getElementById('btnExport').onclick = exportCsv;
   document.getElementById('linkTambahMaster').onclick = tambahMaster;
   document.getElementById('btnUbahApi').onclick = () => promptApiUrl(false);
+  document.getElementById('jumlah').oninput = hitungNilaiForm;
+  document.getElementById('hargaSatuan').oninput = hitungNilaiForm;
 
   muatData();
 }
@@ -443,7 +460,7 @@ function onError(err){
   showToast('Terjadi kesalahan: ' + msg + ' — cek alamat API lewat tombol ⚙️ API.', true);
   const tbody = document.getElementById('tabelBody');
   if (tbody && tbody.children.length && tbody.children[0].textContent.indexOf('Memuat data') !== -1){
-    tbody.innerHTML = `<tr><td colspan="10"><div class="kosong"><div class="ikon">⚠️</div>Gagal terhubung ke API.<br>Klik tombol <strong>⚙️ API</strong> di atas untuk memeriksa/mengisi alamat Web App Apps Script Anda.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12"><div class="kosong"><div class="ikon">⚠️</div>Gagal terhubung ke API.<br>Klik tombol <strong>⚙️ API</strong> di atas untuk memeriksa/mengisi alamat Web App Apps Script Anda.</div></td></tr>`;
   }
 }
 
@@ -453,6 +470,11 @@ function showLoading(){ document.getElementById('loadingVeil').classList.remove(
 function escapeHtml(str){
   return (str === null || str === undefined) ? '' : String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatRupiah(v){
+  const n = Number(v) || 0;
+  return 'Rp ' + n.toLocaleString('id-ID');
 }
 
 function formatTanggalTampil(iso){
@@ -496,7 +518,7 @@ function renderTabel(){
 
   const tbody = document.getElementById('tabelBody');
   if (rowsHalamanIni.length === 0){
-    tbody.innerHTML = `<tr><td colspan="10"><div class="kosong"><div class="ikon">📭</div>Belum ada data yang cocok.<br>Klik <strong>“Catat Surat Masuk”</strong> untuk menambahkan data pertama.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12"><div class="kosong"><div class="ikon">📭</div>Belum ada data yang cocok.<br>Klik <strong>“Catat Surat Masuk”</strong> untuk menambahkan data pertama.</div></td></tr>`;
   } else {
     tbody.innerHTML = rowsHalamanIni.map(r => `
       <tr>
@@ -506,6 +528,8 @@ function renderTabel(){
         <td><span class="pill">${escapeHtml(r.namaObat)}</span></td>
         <td class="num">${escapeHtml(r.jumlah)}</td>
         <td>${escapeHtml(r.satuan)}</td>
+        <td class="num">${r.hargaSatuan ? formatRupiah(r.hargaSatuan) : '-'}</td>
+        <td class="num">${r.nilaiTransaksi ? formatRupiah(r.nilaiTransaksi) : '-'}</td>
         <td>${formatTanggalTampil(r.tanggalTerima)}</td>
         <td>${escapeHtml(r.namaPenerima)}</td>
         <td>${escapeHtml(r.keterangan)}</td>
@@ -526,6 +550,7 @@ function renderTabel(){
   const now = new Date();
   const ymNow = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
   document.getElementById('statBulanIni').textContent = basis.filter(r => String(r.tanggalSurat).slice(0,7) === ymNow).length;
+  document.getElementById('statNilaiTransaksi').textContent = formatRupiah(basis.reduce((a,r)=>a+(Number(r.nilaiTransaksi)||0),0));
 }
 
 function renderPagination(totalBaris, totalHalaman){
@@ -579,14 +604,26 @@ function openForm(record){
     document.getElementById('namaObat').value = record.namaObat || '';
     document.getElementById('jumlah').value = record.jumlah || '';
     document.getElementById('satuan').value = record.satuan || '';
+    document.getElementById('hargaSatuan').value = record.hargaSatuan || '';
     document.getElementById('tanggalTerima').value = record.tanggalTerima || '';
     document.getElementById('namaPenerima').value = record.namaPenerima || '';
     document.getElementById('jabatanPenerima').value = record.jabatanPenerima || '';
     document.getElementById('keterangan').value = record.keterangan || '';
   }
+  hitungNilaiForm();
   document.getElementById('overlayForm').classList.add('show');
 }
 function closeForm(){ document.getElementById('overlayForm').classList.remove('show'); }
+
+// Hitung otomatis "Nilai Transaksi" = Jumlah x Harga Satuan, ditampilkan
+// live di form (field read-only), nilai sebenarnya tetap dihitung ulang
+// di server (Code.gs) saat disimpan supaya konsisten.
+function hitungNilaiForm(){
+  const jumlah = Number(document.getElementById('jumlah').value) || 0;
+  const harga = Number(document.getElementById('hargaSatuan').value) || 0;
+  const nilai = jumlah * harga;
+  document.getElementById('nilaiTransaksiTampil').value = nilai > 0 ? formatRupiah(nilai) : '';
+}
 
 function editRow(rowIndex){
   const rec = STATE.records.find(r => r.rowIndex === rowIndex);
@@ -612,6 +649,7 @@ function simpanData(){
     namaObat: document.getElementById('namaObat').value.trim(),
     jumlah: document.getElementById('jumlah').value,
     satuan: document.getElementById('satuan').value,
+    hargaSatuan: document.getElementById('hargaSatuan').value,
     tanggalTerima: document.getElementById('tanggalTerima').value,
     namaPenerima: document.getElementById('namaPenerima').value.trim(),
     jabatanPenerima: document.getElementById('jabatanPenerima').value.trim(),
@@ -656,10 +694,10 @@ function tambahMaster(e){
 function exportCsv(){
   const rows = STATE.records;
   if (rows.length === 0){ showToast('Tidak ada data untuk diekspor.', true); return; }
-  const header = ['Tanggal Surat','Nomor Surat SBBK','Asal Instansi','Perihal','Nama Obat/BMHP KAB','Jumlah','Satuan','Tanggal Terima','Nama Penerima','Jabatan Penerima','Keterangan'];
+  const header = ['Tanggal Surat','Nomor Surat SBBK','Asal Instansi','Perihal','Nama Obat/BMHP KAB','Jumlah','Satuan','Harga Satuan','Nilai Transaksi','Tanggal Terima','Nama Penerima','Jabatan Penerima','Keterangan'];
   const lines = [header.join(',')];
   rows.forEach(r => {
-    const vals = [r.tanggalSurat, r.nomorSurat, r.asalInstansi, r.perihal, r.namaObat, r.jumlah, r.satuan, r.tanggalTerima, r.namaPenerima, r.jabatanPenerima, r.keterangan];
+    const vals = [r.tanggalSurat, r.nomorSurat, r.asalInstansi, r.perihal, r.namaObat, r.jumlah, r.satuan, r.hargaSatuan, r.nilaiTransaksi, r.tanggalTerima, r.namaPenerima, r.jabatanPenerima, r.keterangan];
     lines.push(vals.map(v => '"' + String(v===undefined||v===null?'':v).replace(/"/g,'""') + '"').join(','));
   });
   const blob = new Blob(["\ufeff" + lines.join('\r\n')], {type:'text/csv;charset=utf-8;'});
