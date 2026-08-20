@@ -158,10 +158,28 @@
 
   footer{text-align:center;color:var(--abu);font-size:11.5px;margin-top:26px;}
 
+  /* ---------- AREA CETAK (laporan terpisah, dibangun saat tombol Cetak diklik) ---------- */
+  .area-cetak{display:none;}
+  .area-cetak .kop-cetak{text-align:center;margin-bottom:14px;}
+  .area-cetak .kop-cetak h1{margin:0 0 2px;font-size:16px;letter-spacing:.5px;}
+  .area-cetak .kop-cetak h2{margin:0 0 10px;font-size:12px;font-weight:600;color:#333;}
+  .area-cetak .info-cetak{font-size:10.5px;color:#333;margin-bottom:10px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;}
+  .area-cetak table{width:100%;border-collapse:collapse;font-size:9.5px;}
+  .area-cetak th, .area-cetak td{border:1px solid #444;padding:4px 5px;text-align:left;vertical-align:top;}
+  .area-cetak th{background:#e7efe9;font-weight:700;text-transform:uppercase;font-size:8.5px;}
+  .area-cetak td.num{text-align:right;font-family:var(--font-angka);}
+  .area-cetak tfoot td{font-weight:700;background:#f2f2f2;}
+  .area-cetak .no-col{width:26px;text-align:center;}
+
   @media print{
-    .app-header,.toolbar,.aksi-cell,.stat-row,footer,#toast,.no-print{display:none !important;}
-    body{background:#fff;}
-    .table-wrap{border:none;}
+    body > *:not(.area-cetak){display:none !important;}
+    .area-cetak{display:block !important;}
+    body{background:#fff;margin:0;}
+    @page{size:landscape;margin:10mm;}
+    .area-cetak table{page-break-inside:auto;}
+    .area-cetak tr{page-break-inside:avoid;}
+    .area-cetak thead{display:table-header-group;} /* header berulang tiap halaman cetak */
+    .area-cetak tfoot{display:table-row-group;}
   }
   @media (max-width:720px){
     .form-grid{grid-template-columns:1fr;}
@@ -337,6 +355,10 @@
 
 <div id="toast"></div>
 
+<!-- Area khusus laporan cetak — diisi ulang tiap kali tombol Cetak diklik,
+     hanya terlihat saat mode print (lihat @media print di atas). -->
+<div id="areaCetak" class="area-cetak"></div>
+
 <script>
 /* =====================================================================
    KONFIGURASI API — sudah permanen tertanam di file ini.
@@ -364,7 +386,7 @@ function init(){
   document.getElementById('filterBulan').onchange = () => { halamanAktif = 1; renderTabel(); };
   document.getElementById('filterTahun').onchange = () => { halamanAktif = 1; renderTabel(); };
   document.getElementById('filterAsal').onchange = () => { halamanAktif = 1; renderTabel(); };
-  document.getElementById('btnCetak').onclick = () => window.print();
+  document.getElementById('btnCetak').onclick = cetakLaporan;
   document.getElementById('btnExport').onclick = exportCsv;
   document.getElementById('linkTambahMaster').onclick = tambahMaster;
   document.getElementById('btnUbahApi').onclick = () => promptApiUrl(false);
@@ -567,7 +589,10 @@ function buildFilterAsal(){
   if (sorted.includes(nilaiSekarang)) sel.value = nilaiSekarang;
 }
 
-function renderTabel(){
+// Ambil data yang sudah difilter (pencarian, asal instansi, bulan, tahun)
+// dan diurutkan — dipakai BERSAMA oleh tabel (dengan paginasi) maupun
+// cetak laporan (TANPA paginasi, semua baris hasil filter ikut tercetak).
+function getDataTerfilter(){
   const q = document.getElementById('cariInput').value.trim().toLowerCase();
   const bulan = document.getElementById('filterBulan').value;
   const tahun = document.getElementById('filterTahun').value;
@@ -582,7 +607,6 @@ function renderTabel(){
     return gabung.includes(q);
   });
 
-  // urutkan berdasarkan Tanggal Surat sesuai arah yang dipilih (klik header)
   rows = rows.slice().sort((a, b) => {
     const ta = a.tanggalSurat || '';
     const tb = b.tanggalSurat || '';
@@ -590,6 +614,12 @@ function renderTabel(){
     const hasil = ta < tb ? -1 : 1;
     return urutTanggal === 'asc' ? hasil : -hasil;
   });
+
+  return rows;
+}
+
+function renderTabel(){
+  let rows = getDataTerfilter();
 
   const totalBaris = rows.length;
   const totalHalaman = Math.max(1, Math.ceil(totalBaris / BARIS_PER_HALAMAN));
@@ -818,6 +848,89 @@ function tambahMaster(e){
       showToast('"' + namaTersimpan + '" ditambahkan ke daftar master.');
     })
     .catch(err => { hideLoading(); onError(err); });
+}
+
+// Susun laporan cetak: JUDUL + info filter aktif + SEMUA baris hasil filter
+// (bukan cuma 15 baris di halaman aktif), lalu panggil dialog cetak browser.
+function cetakLaporan(){
+  const rows = getDataTerfilter();
+  if (rows.length === 0){ showToast('Tidak ada data untuk dicetak.', true); return; }
+
+  const bulanTerpilih = document.getElementById('filterBulan');
+  const namaBulan = bulanTerpilih.value ? bulanTerpilih.options[bulanTerpilih.selectedIndex].textContent : 'Semua Bulan';
+  const tahunTerpilih = document.getElementById('filterTahun').value || 'Semua Tahun';
+  const asalTerpilih = document.getElementById('filterAsal').value || 'Semua Asal Instansi';
+  const kataKunci = document.getElementById('cariInput').value.trim();
+
+  const totalJumlah = rows.reduce((a,r)=>a+(Number(r.jumlah)||0),0);
+  const totalNilai = rows.reduce((a,r)=>a+(Number(r.nilaiTransaksi)||0),0);
+  const totalSuratUnik = hitungNomorSuratUnik(rows);
+
+  const now = new Date();
+  const tanggalCetak = formatTanggalTampil(now.toISOString().slice(0,10)) + ' ' +
+    String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+
+  const barisTabel = rows.map((r, i) => `
+    <tr>
+      <td class="no-col">${i+1}</td>
+      <td>${formatTanggalTampil(r.tanggalSurat)}</td>
+      <td>${escapeHtml(r.nomorSurat)}</td>
+      <td>${escapeHtml(r.asalInstansi)}</td>
+      <td>${escapeHtml(r.namaObat)}</td>
+      <td class="num">${escapeHtml(r.jumlah)}</td>
+      <td>${escapeHtml(r.satuan)}</td>
+      <td class="num">${r.hargaSatuan ? formatRupiah(r.hargaSatuan) : '-'}</td>
+      <td class="num">${r.nilaiTransaksi ? formatRupiah(r.nilaiTransaksi) : '-'}</td>
+      <td>${formatTanggalTampil(r.tanggalTerima)}</td>
+      <td>${escapeHtml(r.namaPenerima)}</td>
+      <td>${escapeHtml(r.keterangan)}</td>
+    </tr>`).join('');
+
+  document.getElementById('areaCetak').innerHTML = `
+    <div class="kop-cetak">
+      <h1>REKAP SBBK OBAT & BMHP PROGRAM</h1>
+      <h2>${escapeHtml(STATE.settings.nama_instansi || '')}${STATE.settings.nama_unit ? ' — ' + escapeHtml(STATE.settings.nama_unit) : ''}</h2>
+    </div>
+    <div class="info-cetak">
+      <div>
+        Asal Instansi: <strong>${escapeHtml(asalTerpilih)}</strong> &nbsp;|&nbsp;
+        Bulan: <strong>${escapeHtml(namaBulan)}</strong> &nbsp;|&nbsp;
+        Tahun: <strong>${escapeHtml(tahunTerpilih)}</strong>
+        ${kataKunci ? ' &nbsp;|&nbsp; Kata kunci: <strong>' + escapeHtml(kataKunci) + '</strong>' : ''}
+      </div>
+      <div>Dicetak: ${tanggalCetak}</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="no-col">No</th>
+          <th>Tgl Surat</th>
+          <th>No. Surat SBBK</th>
+          <th>Asal Instansi</th>
+          <th>Nama Obat/BMHP KAB</th>
+          <th>Jumlah</th>
+          <th>Satuan</th>
+          <th>Harga Satuan</th>
+          <th>Nilai Transaksi</th>
+          <th>Tgl Terima</th>
+          <th>Penerima</th>
+          <th>Keterangan</th>
+        </tr>
+      </thead>
+      <tbody>${barisTabel}</tbody>
+      <tfoot>
+        <tr>
+          <td colspan="5">TOTAL — ${totalSuratUnik} surat, ${rows.length} baris item</td>
+          <td class="num">${totalJumlah.toLocaleString('id-ID')}</td>
+          <td></td>
+          <td></td>
+          <td class="num">${formatRupiah(totalNilai)}</td>
+          <td colspan="3"></td>
+        </tr>
+      </tfoot>
+    </table>`;
+
+  window.print();
 }
 
 function exportCsv(){
